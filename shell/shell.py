@@ -9,7 +9,8 @@ def main():
 
         if (inputline == 'exit'):
             break
-    
+
+        #ignore basic invalid input
         if len(inputline) == 0 or inputline[0] == ' ':
             continue
 
@@ -22,12 +23,13 @@ def main():
             attemptCommands(args)
             sys.exit(1)
         else:
-            os.wait()
+            os.wait() #Parent waits for child process to end
         
         
 def attemptCommands(args):
     dirs = os.environ["PATH"]
-    
+
+    #Try to find given program for each dir in PATH
     for dir in dirs.split(":"):
         program = "{}/{}".format(dir, args[0])
         try:
