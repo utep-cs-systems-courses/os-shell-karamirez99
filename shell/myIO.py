@@ -1,27 +1,29 @@
 from os import read, write
 
-ibuf = None
 sbuf = ""
     
-def readLine():
+def readLine(keepNewLine = False):
     global sbuf
-
+    lineToReturn = ""
+    
     while True:
         myChar = mygetchar()
+        
         if myChar == "":
             return ""
+        
         if myChar == '\n':
-            lineToReturn = sbuf
-            sbuf = ""
+            if keepNewLine:
+                lineToReturn += '\n'        
             return lineToReturn
         else:
-            sbuf += myChar
+            lineToReturn += myChar
 
 def mygetchar():
-    global ibuf
     global sbuf
 
-    if not ibuf or not len(sbuf):
+    #Read more characters when nothing is left in buffer
+    if not len(sbuf):
         ibuf = read(0, 100)
         sbuf = ibuf.decode()
 
@@ -32,6 +34,16 @@ def mygetchar():
     else:
         return ""
 
+def readLines():
+    line = readLine(True)
+    
+    while line != "":
+        writeLine(line)
+        line = readLine(True)
+
     
 def writeLine(line):
     write(1, line.encode())
+
+if __name__ == "__main__":
+    readLines()
