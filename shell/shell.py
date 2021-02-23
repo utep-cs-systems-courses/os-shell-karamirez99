@@ -2,10 +2,12 @@ import os
 import sys
 from myIO import readLine, writeLine
 
+Testing = False
+
 def main():
     PS1 = os.environ["PS1"] if "PS1" in os.environ else "$: "
     
-    while True:
+    while True and not Testing:
         wait = True
         writeLine(PS1)
             
@@ -30,31 +32,10 @@ def main():
         if "&" in args:
             wait = False
             args = args[0:args.index("&")] + args[args.index("&") + 1:]
-
-        #Handle pipeing
-        if "|" in args:
-            args = separatePipes(args)
-            fds = [os.pipe() for i in range(len(args) - 1)] # call pipe for each pipe
             
-            for fdPair in fds:
-                for fd in fdPair:
-                    os.set_inheritable(fd, True)
-                    
-            for i in range(len(args)):
-                rc = os.fork()
-                if rc < 0:
-                    sys.exit(1)
-                elif rc == 0:
-                    if i == 0:
-                        directPipes(fds[0], "w")
-                    elif i == len(args) - 1:
-                        directPipes(fds[-1], "r")
-                    else:
-                        fd = (fds[i-1][0], fds[i][1])
-                        directPipes(fd, "rw")
-                    args = args[i]
-                    break;
-                    
+        #handle pipes
+        if "|" in args:
+            rc, args = handlePipes(args)
         else:
             rc = os.fork()
             
@@ -66,8 +47,14 @@ def main():
             attemptCommands(args)
             sys.exit(1)
         else:
-           if wait:
-               os.wait() #Parent waits for child process to end
+            if not wait:
+                continue
+            #Wait for all child process to end
+            while True:
+                try:
+                    os.wait() #Parent waits for child process to end
+                except ChildProcessError:
+                    break
             
     print("Exiting my shell")
         
@@ -98,6 +85,33 @@ def redirect(args):
         
     return args
 
+def handlePipes(args):
+    args = separatePipes(args)
+    fds = [os.pipe() for i in range(len(args) - 1)] # call pipe for each pipe
+    rc = None
+    
+    for fdPair in fds:
+        for fd in fdPair:
+            os.set_inheritable(fd, True)
+                    
+    for i in range(len(args)):
+        rc = os.fork()
+        if rc < 0:
+            sys.exit(1)
+        elif rc == 0:
+            if i == 0:
+                directPipes(fds[0], "w")
+            elif i == len(args) - 1:
+                directPipes(fds[-1], "r")
+            else:
+                fd = (fds[i-1][0], fds[i][1])
+                directPipes(fd, "rw")
+            args = args[i]
+            break;
+    closePipes(fds)    
+
+    return (rc, args)
+    
 def separatePipes(args):
     numPipes = args.count("|")
     newArgs = [[] for i in range(numPipes + 1)]
@@ -115,33 +129,30 @@ def directPipes(fd, flag):
 
     #Given to the argument after last pipe
     if flag == "r":
-        os.close(0)
-        os.dup(fd[0])
-        for f in fd:
-            os.close(f)
-        set0 = True
+        set0 = updateFD(fd, 0)
 
     #Given to the argument before first pipe
     elif flag == "w":
-        os.close(1)
-        os.dup(fd[1])
-        for f in fd:
-            os.close(f)
-        set1 = True
+        set1 = updateFD(fd, 1)
+        
     else:
-        os.close(0)
-        os.dup(fd[0])
-        os.close(1)
-        os.dup(fd[1])
-       # for f in fd:
-       #     os.close(f)
-        set0 = True
-        set1 = True
-
+        set0 = updateFD(fd, 0)
+        set1 = updateFD(fd, 1)
+      
     if set0:
         os.set_inheritable(0, True)
     if set1:
         os.set_inheritable(1, True)
+
+def updateFD(fd, fdNum):
+    os.close(fdNum)
+    os.dup(fd[fdNum])
+    return True
+        
+def closePipes(fds):
+    for fdPair in fds:
+        for fd in fdPair:
+            os.close(fd)
         
 if __name__ == "__main__":
     main()
